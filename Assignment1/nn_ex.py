@@ -1,6 +1,5 @@
 #!/anaconda3/bin/python
 import pdb
-
 import numpy as np
 
 class Network(object):
@@ -22,12 +21,12 @@ class Network(object):
         ## a` = s(wa+b)
         self.weights = [np.random.randn(y, x) for x,y in zip(sizes[:-1], sizes[1:])]
 
-    def sigmoid(z):
+    def sigmoid(self, z):
         return 1.0/(1.0 + np.exp(-z))
     
     def feedforward(self, a):
         for b, w in zip(self.biases, self.weights):
-            a = sigmoid(np.dot(w, a)+b)
+            a = self.sigmoid(np.dot(w, a)+b)
         return a
     
     '''
@@ -42,10 +41,10 @@ class Network(object):
         n = len(train)
 
         for j in range(epochs):
+            print("Running epoch #%s" % j)
             ## shuffle training data on each epoch
             np.random.shuffle(train)
-            print(train)
-            ## build a set of mini-batches (random set of data from training data)
+            ## build a set of mini-batches 
             mbatches = [train[k:k+mbatch_size] for k in range(0, n, mbatch_size)]
             ##apply a step of gradient descent for each mini batch
             for mbatch in mbatches:
@@ -60,12 +59,11 @@ class Network(object):
                 print("Epoch %s complete" % j)
     
     def update_mbatch(self, mbatch, eta):
-        print("updating")
         nabla_b = [np.zeros(b.shape) for b in self.biases]
-        nalba_w = [np.zeros(w.shape) for w in self.weights]
+        nabla_w = [np.zeros(w.shape) for w in self.weights]
 
         for x, y in mbatch:
-            delta_nabla_b, detla_nabla_w = self.backprop(x, y)
+            delta_nabla_b, delta_nabla_w = self.backprop(x, y)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
 
@@ -78,31 +76,32 @@ class Network(object):
 
         activation = x
         activations = [x]
+        zs = []
 
         for b, w in zip(self.biases, self.weights):
             z = np.dot(w, activation)+b
             zs.append(z)
-            activation = sigmoid(z)
+            activation = self.sigmoid(z)
             activations.append(activation)
         
-        delta = self.cost_derivative(activations[-1], y)*sigmoid_prime(zs[-1])
+        delta = self.cost_derivative(activations[-1], y) * self.sigmoid_prime(zs[-1])
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
 
-        for l in range(2, self.num_layers):
+        for l in range(2, self.n_layers):
             z = zs[-l]
-            sp = sigmoid_prime(z)
-            delta = np.dot(self.weights[-l+1].transpose(), delta)* sp
+            sp = self.sigmoid_prime(z)
+            delta = np.dot(self.weights[-l+1].transpose(), delta)*sp
             nabla_b[-l] = delta
             nabla_w[-l] = np.dot(delta, activations[-l-1].transpose())
         return (nabla_b, nabla_w)
 
     def evaluate(self, test):
-        test = [(np.argmax(self.feedforward(x)), y) for (x, y) in test]
+        test_results = [(np.argmax(self.feedforward(x)), y) for (x, y) in test]
         return sum(int(x == y) for (x, y) in test_results)
     
     def cost_derivative(self, output_activations, y):
         return (output_activations-y)
     
-    def sigmoid_prime(z):
-        return sigmoid(z)*(1-sigmoid(z))
+    def sigmoid_prime(self, z):
+        return self.sigmoid(z)*(1-self.sigmoid(z))
