@@ -6,10 +6,12 @@ import time
 
 class Network(object):
     '''
-    Target perceptron network
-    [784 inputs perceptron] -> [10 perceptrons] -> [1 perceptron]
+    Perceptron network for identifying handwritten digits
+
+    Target network:
+    [784 inputs perceptron + 1 bias perceptron] -> [10 hidden perceptrons] -> [1 output perceptron]
     '''
-    def __init__(self, msize=0.1, eta=0.1):
+    def __init__(self, msize=0.1, eta=0.001, prints=False):
         ## Network Setup
         self.n_input = 784
         self.n_hidden = 10
@@ -21,8 +23,24 @@ class Network(object):
         self.subset_fraction = msize
         self.learning_rate = eta
 
+        ## Misc
+        self.prints = prints
+
         ## Network Initialization
         self.weights = [self.weight_range * np.random.randn(self.n_hidden, self.n_input + 1), np.random.randn(self.n_output, self.n_hidden)] # + 1 is for bias input
+
+        if self.prints:
+            print("----------")
+            print("Perceptron network parameters:")
+            print(f"Input layer size: {self.n_input + 1} perceptrons")
+            print(f"Hidden layer size: {self.n_hidden} perceptrons")
+            print(f"Output layer size: {self.n_output} perceptrons")
+            print("Training parameters: ")
+            print(f"Training for {self.n_epochs} epochs")
+            print(f"Subset fraction for stochastic training: {self.subset_fraction} of training data")
+            print(f"Learning rate: {self.learning_rate}")
+            print("----------")
+
 
     def Test(self, test_data):
         n_test = len(test_data)
@@ -38,9 +56,11 @@ class Network(object):
         
         return np.sum(results) / n_test
 
-    def Train(self, training_data):
+
+    def Train(self, training_data, test_data=None):
         '''
         Runner method for perceptron training algorithm.
+
         Algorithm Overview:
         1. Select a data subset from the training data (size M)
         2. For each set of (features (x_i), target (t)) in the subset do:
@@ -52,15 +72,19 @@ class Network(object):
         M = len(training_data)
         subset_size = int(M * self.subset_fraction)
 
+        if test_data != None:
+            results = []
+            result = self.Test(test_data)
+            if self.prints:
+                print(f"Accuracy with no training: {100*result:.2f}%")
+            results.append(100*result)
+
         ## Select a subset
         np.random.shuffle(training_data)
         training_sets = [training_data[k:k+subset_size] for k in range(0, M, subset_size)]
 
         for i in range(self.n_epochs):
-            print("Processing epoch #%s" % i)
-
             for training_set in training_sets:
-
                 ## Compute hidden layer outputs
                 for features, target in training_set:
                     features = np.append(features, 1) # append bias here
@@ -72,22 +96,29 @@ class Network(object):
                     incorrect_hidden_perceptrons = np.where(hidden_targets != hidden_outputs)[0]
                     for j in incorrect_hidden_perceptrons:
                         self.weights[0][j] = self.weights[0][j] + self.learning_rate * (hidden_targets[j] - hidden_outputs[j]) * features
+                    
+            if test_data != None:
+                result = self.Test(test_data)
+                if self.prints:
+                    print(f"Accuracy after epoch #{i+1}: {100*result:.2f}%")
+                results.append(100*result)
+
+        if test_data != None:
+            return results
+        else:
+            return None
 
 
     def hidden_outputs(self, features):
         hidden_outputs = []
         hidden_sums = []
-        features = np.reshape(features, (features.shape[0], 1))
+        features = np.reshape(features, (features.shape[0], 1)) # reshape features array from eg. (785,) to (785, 1)
         for i in range(self.n_hidden):
             perceptron_sum = np.dot(self.weights[0][i], features)
             hidden_outputs.append(np.where(perceptron_sum > 0, 1, 0)[0])
             hidden_sums.append(perceptron_sum)
 
         return hidden_outputs, hidden_sums
-
-
-    def update_weights(self, weights, features, hidden_outputs, target_outputs):
-        return weights + self.learning_rate * (target_outputs - hidden_outputs) * features
 
 
 def main():
@@ -117,7 +148,7 @@ def main():
     nn_start = time.time()
     perceptron_network = Network()
 
-    perceptron_network.Train(training_data)
+    perceptron_network.Train(training_data, test_data)
     accuracy = perceptron_network.Test(test_data)
     print("Accuracy: %s" % accuracy)
 
