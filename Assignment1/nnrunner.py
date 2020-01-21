@@ -3,6 +3,7 @@ import pdb
 import numpy as np
 import pandas
 import time
+from collections import defaultdict
 
 class Network(object):
     '''
@@ -11,7 +12,7 @@ class Network(object):
     Target network:
     [784 inputs perceptron + 1 bias perceptron] -> [10 hidden perceptrons] -> [1 output perceptron]
     '''
-    def __init__(self, msize=0.1, eta=0.001, prints=False):
+    def __init__(self, msize=0.1, eta=0.001, print_logs=False):
         ## Network Setup
         self.n_input = 784
         self.n_hidden = 10
@@ -24,7 +25,7 @@ class Network(object):
         self.learning_rate = eta
 
         ## Misc
-        self.prints = prints
+        self.prints = print_logs
 
         ## Network Initialization
         self.weights = [self.weight_range * np.random.randn(self.n_hidden, self.n_input + 1), np.random.randn(self.n_output, self.n_hidden)] # + 1 is for bias input
@@ -42,19 +43,31 @@ class Network(object):
             print("----------")
 
 
-    def Test(self, test_data):
+    def Test(self, test_data, build_matrix=False):
         n_test = len(test_data)
         results = np.zeros(n_test)
         idx = 0
+        if build_matrix:
+            conf_matrix = defaultdict(int)
+
         ## Compute hidden layer outputs
         for features, target in test_data:
             features = np.append(features, 1) # append bias here
             _, perceptron_sums = self.hidden_outputs(features)
             prediction = np.argmax(perceptron_sums)
+
+            if build_matrix:
+                conf_matrix[(prediction, target)] += 1
+
             results[idx] = 1 if prediction == target else 0
             idx += 1
+
+        accuracy = np.sum(results) / n_test
         
-        return np.sum(results) / n_test
+        if build_matrix:
+            return accuracy, conf_matrix
+        else:
+            return accuracy
 
 
     def Train(self, training_data, test_data=None):
