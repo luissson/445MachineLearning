@@ -4,6 +4,8 @@ import numpy as np
 import pandas
 import time
 from collections import defaultdict
+import pickle
+from datetime import date
 
 class Network(object):
     '''
@@ -70,7 +72,7 @@ class Network(object):
             return accuracy
 
 
-    def Train(self, training_data, test_data=None):
+    def Train(self, training_data, test_data, fast=False):
         '''
         Runner method for perceptron training algorithm.
 
@@ -85,18 +87,22 @@ class Network(object):
         M = len(training_data)
         subset_size = int(M * self.subset_fraction)
 
-        if test_data != None:
+        if not fast:
             results = []
-            result = self.Test(test_data)
+            test_result = self.Test(test_data)
+            train_result = self.Test(training_data)
+
+            results.append((train_result, test_result))
+
             if self.prints:
-                print(f"Accuracy with no training: {100*result:.2f}%")
-            results.append(100*result)
+                print(f"Training set accuracy with no training: {100*train_result:.2f}%")
+                print(f"Test set accuracy with no training: {100*test_result:.2f}%")
 
         ## Select a subset
         np.random.shuffle(training_data)
         training_sets = [training_data[k:k+subset_size] for k in range(0, M, subset_size)]
 
-        for i in range(self.n_epochs):
+        for _ in range(self.n_epochs):
             for training_set in training_sets:
                 ## Compute hidden layer outputs
                 for features, target in training_set:
@@ -109,14 +115,21 @@ class Network(object):
                     incorrect_hidden_perceptrons = np.where(hidden_targets != hidden_outputs)[0]
                     for j in incorrect_hidden_perceptrons:
                         self.weights[0][j] = self.weights[0][j] + self.learning_rate * (hidden_targets[j] - hidden_outputs[j]) * features
-                    
-            if test_data != None:
-                result = self.Test(test_data)
-                if self.prints:
-                    print(f"Accuracy after epoch #{i+1}: {100*result:.2f}%")
-                results.append(100*result)
 
-        if test_data != None:
+            if not fast:
+                train_result = self.Test(training_data)
+                test_result = self.Test(test_data)
+
+                if self.prints:
+                    print(f"Training set accuracy with no training: {100*train_result:.2f}%")
+                    print(f"Test set accuracy with no training: {100*test_result:.2f}%")
+
+                results.append((train_result, test_result))
+
+        if not fast:
+            with open(f"results/training_results_{str(date.today())}_{self.learning_rate}_{subset_size}.data", "wb") as f:
+                pickle.dump(results, f)
+            print("Training results written to file.")
             return results
         else:
             return None
@@ -162,8 +175,10 @@ def main():
     perceptron_network = Network()
 
     perceptron_network.Train(training_data, test_data)
+    print(f"Network training completed in {(time.time() - nn_start)/60.0:.2f} minutes")
+
     accuracy = perceptron_network.Test(test_data)
-    print("Accuracy: %s" % accuracy)
+    print(f"Test set accuracy: {100*accuracy:.2f}%")
 
 
 if __name__ == '__main__':
