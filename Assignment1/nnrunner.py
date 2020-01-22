@@ -5,7 +5,7 @@ import pandas
 import time
 from collections import defaultdict
 import pickle
-from datetime import date
+from datetime import datetime
 
 class Network(object):
     '''
@@ -127,7 +127,8 @@ class Network(object):
                 results.append((train_result, test_result))
 
         if not fast:
-            with open(f"results/training_results_{str(date.today())}_{self.learning_rate}_{subset_size}.data", "wb") as f:
+            badchars = [' ', ':']
+            with open(f"results/training_results_{str(datetime.now()).translate({ord(x): '_' for x in badchars})}_{self.learning_rate}_{subset_size}.data", "wb") as f:
                 pickle.dump(results, f)
             print("Training results written to file.")
             return results

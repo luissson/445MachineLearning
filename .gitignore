@@ -1,3 +1,8 @@
+*.ipny_checkpoints/
+*.tex
+*.svg
+*.png
+*.html
 *.csv
 *.pdf
 *.pyc
