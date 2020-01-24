@@ -1,5 +1,4 @@
 #!/anaconda3/bin/python
-import pdb
 import numpy as np
 import pandas
 import time
@@ -46,6 +45,10 @@ class Network(object):
 
 
     def Test(self, test_data, build_matrix=False):
+        '''
+
+        '''
+
         n_test = len(test_data)
         results = np.zeros(n_test)
         idx = 0
@@ -89,7 +92,7 @@ class Network(object):
 
         if not fast:
             results = []
-            test_result = self.Test(test_data)
+            test_result = self.Test(test_data, build_matrix=True)
             train_result = self.Test(training_data)
 
             results.append((train_result, test_result))
@@ -99,7 +102,7 @@ class Network(object):
                 print(f"Test set accuracy with no training: {100*test_result:.2f}%")
 
         ## Select a subset
-        np.random.shuffle(training_data)
+        np.random.shuffle(training_data) #randomize training set
         training_sets = [training_data[k:k+subset_size] for k in range(0, M, subset_size)]
 
         for _ in range(self.n_epochs):
@@ -112,13 +115,14 @@ class Network(object):
                     hidden_outputs, _ = self.hidden_outputs(features)
                 
                     ## Update weights for incorrect predictions
-                    incorrect_hidden_perceptrons = np.where(hidden_targets != hidden_outputs)[0]
+                    incorrect_hidden_perceptrons = np.where(hidden_targets != hidden_outputs)[0] #build ndarray with perceptrons that guessed wrong
                     for j in incorrect_hidden_perceptrons:
-                        self.weights[0][j] = self.weights[0][j] + self.learning_rate * (hidden_targets[j] - hidden_outputs[j]) * features
+                        self.weights[0][j] = self.weights[0][j] + self.learning_rate * (hidden_targets[j] - hidden_outputs[j]) * features #update weights corresponding to wrong guesses
 
             if not fast:
+                # Test model with test and training data after each epoch
                 train_result = self.Test(training_data)
-                test_result = self.Test(test_data)
+                test_result = self.Test(test_data, build_matrix=True)
 
                 if self.prints:
                     print(f"Training set accuracy with no training: {100*train_result:.2f}%")
@@ -127,23 +131,28 @@ class Network(object):
                 results.append((train_result, test_result))
 
         if not fast:
+            # Save training results to file here
             badchars = [' ', ':']
             with open(f"results/training_results_{str(datetime.now()).translate({ord(x): '_' for x in badchars})}_{self.learning_rate}_{subset_size}.data", "wb") as f:
                 pickle.dump(results, f)
             print("Training results written to file.")
+
             return results
         else:
             return None
 
 
     def hidden_outputs(self, features):
+        '''
+        Computes the output from the hidden layer (number of perceptrons given by self.n_hidden)
+        '''
         hidden_outputs = []
         hidden_sums = []
         features = np.reshape(features, (features.shape[0], 1)) # reshape features array from eg. (785,) to (785, 1)
         for i in range(self.n_hidden):
-            perceptron_sum = np.dot(self.weights[0][i], features)
-            hidden_outputs.append(np.where(perceptron_sum > 0, 1, 0)[0])
-            hidden_sums.append(perceptron_sum)
+            perceptron_sum = np.dot(self.weights[0][i], features) #weights*features dot product
+            hidden_outputs.append(np.where(perceptron_sum > 0, 1, 0)[0]) #threshold activation function
+            hidden_sums.append(perceptron_sum) #raw perceptron sum to determine prediction
 
         return hidden_outputs, hidden_sums
 

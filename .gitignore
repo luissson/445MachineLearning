@@ -1,4 +1,5 @@
 *.ipny_checkpoints/
+Assignment1/.ipny_checkpoints/
 *.tex
 *.svg
 *.png
