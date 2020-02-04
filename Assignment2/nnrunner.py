@@ -131,10 +131,9 @@ class Network(object):
                 
 
             print(f"Epoch #{epoch_num} elapsed time: {(time.time() - start_training)/60.0:.2f} minutes")
-            if epoch_num == 5:
-                pdb.set_trace()
 
             if slow_training:
+                pass
                 # Test model with test and training data after each epoch
                 # train_result = self.Test(training_data)
 
@@ -172,30 +171,30 @@ class Network(object):
         '''
         Computes the output from the hidden layer (number of perceptrons given by self.n_hidden)
         '''
-        output_activations = []
+        output_activations = [0]*self.n_output
         # features = np.reshape(features, (features.shape[0], 1)) # reshape features array from eg. (785,) to (785, 1)
         for i in range(self.n_output):
             z = np.dot(self.weights[1][i], features) #weights*features dot product
-            output_activations.append(self.sigma(z)) #threshold activation function
+            output_activations[i] = self.sigma(z) #threshold activation function
 
         return output_activations 
 
 
     def output_error(self, outputs, targets):
-        output_errors = []
+        output_errors = [0] * self.n_output
         for i in range(self.n_output):
-            output_errors.append(outputs[i] * (1.0 - outputs[i]) * (targets[i] - outputs[i]))
+            output_errors[i] = outputs[i] * (1.0 - outputs[i]) * (targets[i] - outputs[i])
 
         return output_errors
 
 
     def hidden_error(self, hidden_activations, output_errors):
-        hidden_errors = []
+        hidden_errors = [0] * self.n_hidden
         for j in range(self.n_hidden):
             weighted_out_errors = 0
             for k in range(self.n_output):
                 weighted_out_errors += self.weights[1][k][j]
-            hidden_errors.append(hidden_activations[j] * (1 - hidden_activations[j]) * weighted_out_errors)
+            hidden_errors[j] = hidden_activations[j] * (1 - hidden_activations[j]) * weighted_out_errors
 
         return hidden_errors
 
@@ -242,6 +241,10 @@ def main():
 
     nn_net.Train(qrter_train, None)
     print(f"Network training completed in {(time.time() - nn_start)/60.0:.2f} minutes")
+
+    badchars = [' ', ':']
+    with open(f"results/nn_qrtr_{str(datetime.now()).translate({ord(x): '_' for x in badchars})}.model", "wb") as f:
+        pickle.dump(f, nn_net)
 
 
 if __name__ == '__main__':
