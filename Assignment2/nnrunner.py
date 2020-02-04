@@ -100,6 +100,7 @@ class Network(object):
         np.random.shuffle(training_data) #randomize training set
         training_sets = [training_data[k:k+subset_size] for k in range(0, M, subset_size)]
 
+        print_us_logs = False 
         start_training = time.time()
         ho_delta_hist = [0]
         ih_delta_hist = [0]
@@ -107,27 +108,43 @@ class Network(object):
             for training_set in training_sets:
                 for features, target in training_set:
                     ## Compute hidden layer activations
-                    features = np.append(features, 1) # append input bias here
-
+                    hid_act = time.clock()
                     hidden_activations = self.hidden_activations(features)
                     hidden_activations = np.append(hidden_activations, 1) # append hidden bias here
+                    if print_us_logs:
+                        print(f"Time to compute hidden layer activations: {(time.clock() - hid_act)*10**6}")
 
                     ## Compute output layer activations
+                    out_act = time.clock()
                     output_activations = self.output_activations(hidden_activations)
+                    if print_us_logs:
+                        print(f"Time to compute output layer activations: {(time.clock() - out_act)*10**6}")
 
                     ## Compute output layer error
+                    out_err = time.clock()
                     output_targets = np.full(self.n_hidden, 0.1)
                     output_targets[target] = 0.9
                     output_errors = self.output_error(output_activations, output_targets)
+                    if print_us_logs:
+                        print(f"Time to compute output layer errors: {(time.clock() - out_err)*10**6}")
 
                     ## Compute hidden layer error
+                    hid_err = time.clock()
                     hidden_errors = self.hidden_error(hidden_activations, output_errors)
+                    if print_us_logs:
+                        print(f"Time to compute hidden layer errors: {(time.clock() - hid_err)*10**6}")
 
                     ## Update hidden to output layer weights
+                    ho_w = time.clock()
                     self.update_ho_weights(hidden_activations, output_errors, ho_delta_hist)
+                    if print_us_logs:
+                        print(f"Time to compute ho weights: {(time.clock() - ho_w)*10**6}")
 
                     ## Update input to hidden layer weights
+                    ih_w = time.clock()
                     self.update_ih_weights(features, hidden_errors, ih_delta_hist)
+                    if print_us_logs:
+                        print(f"Time to compute ih weights: {(time.clock() - ih_w)*10**6}")
                 
 
             print(f"Epoch #{epoch_num} elapsed time: {(time.time() - start_training)/60.0:.2f} minutes")
@@ -172,7 +189,6 @@ class Network(object):
         Computes the output from the hidden layer (number of perceptrons given by self.n_hidden)
         '''
         output_activations = [0]*self.n_output
-        # features = np.reshape(features, (features.shape[0], 1)) # reshape features array from eg. (785,) to (785, 1)
         for i in range(self.n_output):
             z = np.dot(self.weights[1][i], features) #weights*features dot product
             output_activations[i] = self.sigma(z) #threshold activation function
@@ -216,10 +232,9 @@ class Network(object):
         # self.weights[0][0] weights from input that attach to the 0th hidden unit
         # in class note notation: self.weights[0][j][i]
         for j in range(self.n_hidden):
-            for i in range(self.n_input):
-                ih_delta = self.learning_rate * hidden_errors[j] * features[i]
-                ih_delta_hist.append(ih_delta)
-                self.weights[0][j][i] += ih_delta + self.momentum * ih_delta_hist.pop()
+            ih_delta = self.learning_rate * np.multiply(hidden_errors[j], features)
+            ih_delta_hist.append(ih_delta)
+            self.weights[0][j] = np.add(self.weights[0][j], ih_delta + np.multiply(self.momentum, ih_delta_hist.pop()))
 
 
 def main():
@@ -231,9 +246,11 @@ def main():
     nn_net = Network()
 
     ## Load training data
+    '''
     fname = "half_train.data"
     with open("data/" + fname, "rb") as f:
         half_train = pickle.load(f)
+    '''
 
     fname = "qrter_train.data"
     with open("data/" + fname, "rb") as f:
