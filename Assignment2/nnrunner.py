@@ -14,24 +14,24 @@ class Network(object):
     Target network:
     [784 input + 1 bias input units] -> [n_hidden hidden units] -> [10 output units]
     '''
-    def __init__(self, msize=0.1, eta=0.001, momentum=1, print_logs=False):
+    def __init__(self, subset_size=10, n_hidden=20, eta=0.1, momentum=0.95, print_logs=False):
         ## Network Setup
         self.n_input = 784
-        self.n_hidden = 20 # 20, 50, 100
+        self.n_hidden = n_hidden # 20, 50, 100
         self.n_output = 10 
         self.weight_range = 0.02 # sigma for normal distribution
 
         ## Training Setup
         self.n_epochs = 50
-        self.subset_fraction = msize
         self.learning_rate = eta
         self.momentum = momentum 
+        self.subset_size = subset_size
 
         ## Misc
         self.prints = print_logs
 
         ## Network Initialization
-        self.weights = [self.weight_range * np.random.randn(self.n_hidden, self.n_input + 1), np.random.randn(self.n_output, self.n_hidden + 1)] # + 1 is for bias input
+        self.weights = [self.weight_range * np.random.randn(self.n_hidden, self.n_input + 1), self.weight_range * np.random.randn(self.n_output, self.n_hidden + 1)] # + 1 is for bias input
 
         if self.prints:
             print("----------")
@@ -53,7 +53,6 @@ class Network(object):
     def Test(self, test_data, build_matrix=False):
         '''
         '''
-
         n_test = len(test_data)
         results = np.zeros(n_test)
         idx = 0
@@ -62,9 +61,14 @@ class Network(object):
 
         ## Compute hidden layer outputs
         for features, target in test_data:
-            features = np.append(features, 1) # append bias here
-            perceptron_sums = self.hidden_activations(features)
-            prediction = np.argmax(perceptron_sums)
+            ## Compute hidden layer activations
+            hidden_activations = self.hidden_activations(features)
+            hidden_activations = np.append(hidden_activations, 1) # append hidden bias here
+
+            ## Compute output layer activations
+            output_activations = self.output_activations(hidden_activations)
+
+            prediction = np.argmax(output_activations)
 
             if build_matrix:
                 conf_matrix[(prediction, target)] += 1
@@ -80,7 +84,7 @@ class Network(object):
             return accuracy
 
 
-    def Train(self, training_data, slow_training=False):
+    def Train(self, training_data, test_data, slow_training=False):
         '''
         Runner method for perceptron training algorithm.
 
@@ -93,76 +97,62 @@ class Network(object):
         '''
         ## Build list of random-sub samples
         M = len(training_data)
-        subset_size = int(M * self.subset_fraction)
         results = []
 
         ## Select a subset
-        np.random.shuffle(training_data) #randomize training set
-        training_sets = [training_data[k:k+subset_size] for k in range(0, M, subset_size)]
+        training_sets = [training_data[k:k+self.subset_size] for k in range(0, M, self.subset_size)]
 
-        print_us_logs = False 
+        no_train_result = self.Test(training_data)
+        print(f"Training set accuracy with no training: {100*no_train_result:.2f}%")
+        results.append(no_train_result)
+
         start_training = time.time()
-        ho_delta_hist = [0]
-        ih_delta_hist = [0]
+        ho_delta_hist = [np.zeros((self.n_hidden + 1, 1))]
+        ih_delta_hist = [np.zeros((self.n_input + 1, 1))]
         for epoch_num in range(self.n_epochs):
             for training_set in training_sets:
+                hidden_activations = []
+                output_activations = []
+                output_errors = []
+                hidden_errors = []
                 for features, target in training_set:
                     ## Compute hidden layer activations
-                    hid_act = time.clock()
-                    hidden_activations = self.hidden_activations(features)
-                    hidden_activations = np.append(hidden_activations, 1) # append hidden bias here
-                    if print_us_logs:
-                        print(f"Time to compute hidden layer activations: {(time.clock() - hid_act)*10**6}")
+                    hidden_activations.append(self.hidden_activations(features))
+                    hidden_activations[-1].append(1) # append hidden bias here
 
                     ## Compute output layer activations
-                    out_act = time.clock()
-                    output_activations = self.output_activations(hidden_activations)
-                    if print_us_logs:
-                        print(f"Time to compute output layer activations: {(time.clock() - out_act)*10**6}")
+                    output_activations.append(self.output_activations(hidden_activations[-1]))
 
                     ## Compute output layer error
-                    out_err = time.clock()
-                    output_targets = np.full(self.n_hidden, 0.1)
+                    output_targets = np.full(self.n_output, 0.1) #expensive
                     output_targets[target] = 0.9
-                    output_errors = self.output_error(output_activations, output_targets)
-                    if print_us_logs:
-                        print(f"Time to compute output layer errors: {(time.clock() - out_err)*10**6}")
+                    output_errors.append(self.output_error(output_activations[-1], output_targets))
 
                     ## Compute hidden layer error
-                    hid_err = time.clock()
-                    hidden_errors = self.hidden_error(hidden_activations, output_errors)
-                    if print_us_logs:
-                        print(f"Time to compute hidden layer errors: {(time.clock() - hid_err)*10**6}")
+                    hidden_errors.append(self.hidden_error(hidden_activations[-1], output_errors[-1]))
 
-                    ## Update hidden to output layer weights
-                    ho_w = time.clock()
-                    self.update_ho_weights(hidden_activations, output_errors, ho_delta_hist)
-                    if print_us_logs:
-                        print(f"Time to compute ho weights: {(time.clock() - ho_w)*10**6}")
+                ## Update hidden to output layer weights
+                self.update_ho_weights(hidden_activations, output_errors, ho_delta_hist)
 
-                    ## Update input to hidden layer weights
-                    ih_w = time.clock()
-                    self.update_ih_weights(features, hidden_errors, ih_delta_hist)
-                    if print_us_logs:
-                        print(f"Time to compute ih weights: {(time.clock() - ih_w)*10**6}")
-                
+                ## Update input to hidden layer weights
+                self.update_ih_weights(training_set, hidden_errors, ih_delta_hist)
 
-            print(f"Epoch #{epoch_num} elapsed time: {(time.time() - start_training)/60.0:.2f} minutes")
+            print(f"Epoch #{epoch_num + 1} elapsed time: {(time.time() - start_training)/60.0:.2f} minutes")
 
             if slow_training:
-                pass
                 # Test model with test and training data after each epoch
-                # train_result = self.Test(training_data)
+                train_result = self.Test(training_data)
+                test_result = self.Test(test_data)
 
-                #if self.prints:
-                    #print(f"Training set accuracy with no training: {100*train_result:.2f}%")
+                print(f"Training set accuracy: {100*train_result:.2f}%")
+                print(f"Test set accuracy: {100*test_result:.2f}%")
 
-                #results.append(train_result)
-
+                results.append((train_result, test_result))
+            
         if slow_training:
             # Save training results to file here
             badchars = [' ', ':']
-            with open(f"results/training_results_{str(datetime.now()).translate({ord(x): '_' for x in badchars})}_{self.learning_rate}_{subset_size}.data", "wb") as f:
+            with open(f"results/training_results_{str(datetime.now()).translate({ord(x): '_' for x in badchars})}_{self.learning_rate}_{self.n_hidden}.data", "wb") as f:
                 pickle.dump(results, f)
             print("Training results written to file.")
 
@@ -175,22 +165,22 @@ class Network(object):
         '''
         Computes the output from the hidden layer (number of perceptrons given by self.n_hidden)
         '''
-        hidden_activations = []
+        hidden_activations = [0]*self.n_hidden
         features = np.reshape(features, (features.shape[0], 1)) # reshape features array from eg. (785,) to (785, 1)
         for i in range(self.n_hidden):
-            z = np.dot(self.weights[0][i], features) #weights*features dot product
-            hidden_activations.append(self.sigma(z)[0]) #threshold activation function
+            z = np.dot(self.weights[0][i], features)[0] #weights*features dot product, note both ndarrays -> returns ndarray
+            hidden_activations[i] = self.sigma(z)
 
         return hidden_activations
 
 
-    def output_activations(self, features):
+    def output_activations(self, hidden_activations):
         '''
         Computes the output from the hidden layer (number of perceptrons given by self.n_hidden)
         '''
         output_activations = [0]*self.n_output
         for i in range(self.n_output):
-            z = np.dot(self.weights[1][i], features) #weights*features dot product
+            z = np.dot(self.weights[1][i], hidden_activations) #weights*features dot product
             output_activations[i] = self.sigma(z) #threshold activation function
 
         return output_activations 
@@ -209,30 +199,34 @@ class Network(object):
         for j in range(self.n_hidden):
             weighted_out_errors = 0
             for k in range(self.n_output):
-                weighted_out_errors += self.weights[1][k][j]
+                weighted_out_errors += self.weights[1][k][j] # TODO finish this ...
+
+            pdb.set_trace()
             hidden_errors[j] = hidden_activations[j] * (1 - hidden_activations[j]) * weighted_out_errors
 
         return hidden_errors
+
 
     def update_ho_weights(self, hidden_activations, output_errors, ho_delta_hist):
         ## w_kj <- w_kj + eta * d_k * h_j
         # self.weights[1] output units
         # self.weights[1][0] weights from n_hidden that attach to the 0th output unit
         # in class note notation: self.weights[1][k][j]
+        subset_size = len(hidden_activations)
         for k in range(self.n_output):
-            for j in range(self.n_hidden):
-                ho_delta = self.learning_rate * output_errors[k] * hidden_activations[j]
-                ho_delta_hist.append(ho_delta)
-                self.weights[1][k][j] += ho_delta + self.momentum * ho_delta_hist.pop()
+            ho_delta = self.learning_rate * np.sum([np.multiply(output_errors[i][k], hidden_activations[i]) for i in range(len(hidden_activations))], 0) / subset_size
+            ho_delta_hist.append(ho_delta)
+            self.weights[1][k] = np.add(self.weights[1][k], ho_delta + np.multiply(self.momentum, ho_delta_hist.pop()))
 
 
-    def update_ih_weights(self, features, hidden_errors, ih_delta_hist):
+    def update_ih_weights(self, training_set, hidden_errors, ih_delta_hist):
         ## w_ji <- w_ji + eta * d_j * x_i
         # self.weights[0] hidden units
         # self.weights[0][0] weights from input that attach to the 0th hidden unit
         # in class note notation: self.weights[0][j][i]
+        subset_size = len(training_set)
         for j in range(self.n_hidden):
-            ih_delta = self.learning_rate * np.multiply(hidden_errors[j], features)
+            ih_delta = self.learning_rate * np.sum([np.multiply(hidden_errors[i][j], training_set[i][0]) for i in range(len(training_set))], 0) / subset_size
             ih_delta_hist.append(ih_delta)
             self.weights[0][j] = np.add(self.weights[0][j], ih_delta + np.multiply(self.momentum, ih_delta_hist.pop()))
 
@@ -252,16 +246,20 @@ def main():
         half_train = pickle.load(f)
     '''
 
+    fname = "test.data"
+    with open("data/" + fname, "rb") as f:
+        test_data = pickle.load(f)
+
     fname = "qrter_train.data"
     with open("data/" + fname, "rb") as f:
         qrter_train = pickle.load(f)
 
-    nn_net.Train(qrter_train, None)
+    nn_net.Train(qrter_train, test_data, True)
     print(f"Network training completed in {(time.time() - nn_start)/60.0:.2f} minutes")
 
     badchars = [' ', ':']
     with open(f"results/nn_qrtr_{str(datetime.now()).translate({ord(x): '_' for x in badchars})}.model", "wb") as f:
-        pickle.dump(f, nn_net)
+        pickle.dump(nn_net, f)
 
 
 if __name__ == '__main__':
