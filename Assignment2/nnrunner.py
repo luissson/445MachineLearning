@@ -14,7 +14,7 @@ class Network(object):
     Target network:
     [784 input + 1 bias input units] -> [n_hidden hidden units] -> [10 output units]
     '''
-    def __init__(self, subset_size=10, n_hidden=20, eta=0.1, momentum=0.95, print_logs=False):
+    def __init__(self, subset_size=10, n_hidden=20, eta=0.1, momentum=0.0, print_logs=False):
         ## Network Setup
         self.n_input = 784
         self.n_hidden = n_hidden # 20, 50, 100
@@ -28,12 +28,12 @@ class Network(object):
         self.subset_size = subset_size
 
         ## Misc
-        self.prints = print_logs
+        self.print_logs = print_logs
 
         ## Network Initialization
         self.weights = [self.weight_range * np.random.randn(self.n_hidden, self.n_input + 1), self.weight_range * np.random.randn(self.n_output, self.n_hidden + 1)] # + 1 is for bias input
 
-        if self.prints:
+        if self.print_logs:
             print("----------")
             print("Perceptron network parameters:")
             print(f"Input layer size: {self.n_input + 1} units")
@@ -41,7 +41,7 @@ class Network(object):
             print(f"Output layer size: {self.n_output} units")
             print("Training parameters: ")
             print(f"Training for {self.n_epochs} epochs")
-            print(f"Subset fraction for stochastic training: {self.subset_fraction} of training data")
+            print(f"Subset size for mini-batch training: {self.subset_size} of training data")
             print(f"Learning rate: {self.learning_rate}")
             print("----------")
 
@@ -103,7 +103,10 @@ class Network(object):
         training_sets = [training_data[k:k+self.subset_size] for k in range(0, M, self.subset_size)]
 
         no_train_result = self.Test(training_data)
-        print(f"Training set accuracy with no training: {100*no_train_result:.2f}%")
+
+        if self.print_logs:
+            print(f"Training set accuracy with no training: {100*no_train_result:.2f}%")
+
         results.append(no_train_result)
 
         start_training = time.time()
@@ -137,24 +140,27 @@ class Network(object):
                 ## Update input to hidden layer weights
                 self.update_ih_weights(training_set, hidden_errors, ih_delta_hist)
 
-            print(f"Epoch #{epoch_num + 1} elapsed time: {(time.time() - start_training)/60.0:.2f} minutes")
+            if self.print_logs:
+                print(f"Epoch #{epoch_num + 1} elapsed time: {(time.time() - start_training)/60.0:.2f} minutes")
 
             if slow_training:
                 # Test model with test and training data after each epoch
                 train_result = self.Test(training_data)
                 test_result = self.Test(test_data)
 
-                print(f"Training set accuracy: {100*train_result:.2f}%")
-                print(f"Test set accuracy: {100*test_result:.2f}%")
+                if self.print_logs:
+                    print(f"Training set accuracy: {100*train_result:.2f}%")
+                    print(f"Test set accuracy: {100*test_result:.2f}%")
 
                 results.append((train_result, test_result))
             
         if slow_training:
-            # Save training results to file here
             badchars = [' ', ':']
-            with open(f"results/training_results_{str(datetime.now()).translate({ord(x): '_' for x in badchars})}_{self.learning_rate}_{self.n_hidden}.data", "wb") as f:
+            with open(f"results/training_results_{str(datetime.now()).translate({ord(x): '_' for x in badchars})}_{self.n_hidden}_{len(training_data)}_{self.momentum}.data", "wb") as f:
                 pickle.dump(results, f)
-            print("Training results written to file.")
+
+            if self.print_logs:
+                print("Training results written to file.")
 
             return results
         else:
@@ -199,9 +205,8 @@ class Network(object):
         for j in range(self.n_hidden):
             weighted_out_errors = 0
             for k in range(self.n_output):
-                weighted_out_errors += self.weights[1][k][j] # TODO finish this ...
+                weighted_out_errors += self.weights[1][k][j] * output_errors[k] # TODO finish this ...
 
-            pdb.set_trace()
             hidden_errors[j] = hidden_activations[j] * (1 - hidden_activations[j]) * weighted_out_errors
 
         return hidden_errors
