@@ -86,22 +86,15 @@ class Network(object):
 
     def Train(self, training_data, test_data, slow_training=False):
         '''
-        Runner method for perceptron training algorithm.
-
-        Algorithm Overview:
-        1. Select a data subset from the training data (size M)
-        2. For each set of (features (x_i), target (t)) in the subset do:
-            I. Compute y = a(x.w + b)
-            II. If y != t, update weights w_i. For each w_i:
-                1. w_i <- w_i + eta (t - y) x_i
+        Runner method for neural net training algorithm with backpropagation and momentum
         '''
-        ## Build list of random-sub samples
         M = len(training_data)
         results = []
 
-        ## Select a subset
+        ## Build list of random examples of size self.subset_size
         training_sets = [training_data[k:k+self.subset_size] for k in range(0, M, self.subset_size)]
 
+        ## Get accuracy on training data with no training
         no_train_result = self.Test(training_data)
 
         if self.print_logs:
@@ -109,11 +102,13 @@ class Network(object):
 
         results.append(no_train_result)
 
-        start_training = time.time()
+        ## Stack used for momentum terms (stack implemented with python list append + pop)
         ho_delta_hist = [np.zeros((self.n_hidden + 1, 1))]
         ih_delta_hist = [np.zeros((self.n_input + 1, 1))]
         for epoch_num in range(self.n_epochs):
+            epoch_start = time.time()
             for training_set in training_sets:
+                ## Algorithm utilizes mini-batches, the below containers hold corresponding computations for each mini-batch
                 hidden_activations = []
                 output_activations = []
                 output_errors = []
@@ -127,7 +122,7 @@ class Network(object):
                     output_activations.append(self.output_activations(hidden_activations[-1]))
 
                     ## Compute output layer error
-                    output_targets = np.full(self.n_output, 0.1) #expensive
+                    output_targets = np.full(self.n_output, 0.1) # expensive operation here, should re-write elements instead of allocating new arrays
                     output_targets[target] = 0.9
                     output_errors.append(self.output_error(output_activations[-1], output_targets))
 
@@ -140,8 +135,7 @@ class Network(object):
                 ## Update input to hidden layer weights
                 self.update_ih_weights(training_set, hidden_errors, ih_delta_hist)
 
-            if self.print_logs:
-                print(f"Epoch #{epoch_num + 1} elapsed time: {(time.time() - start_training)/60.0:.2f} minutes")
+            print(f"Epoch #{epoch_num + 1} took: {(time.time() - epoch_start):.2f} seconds")
 
             if slow_training:
                 # Test model with test and training data after each epoch
@@ -171,7 +165,7 @@ class Network(object):
         '''
         Computes the output from the hidden layer (number of perceptrons given by self.n_hidden)
         '''
-        hidden_activations = [0]*self.n_hidden
+        hidden_activations = [0] * self.n_hidden # speeds up run-time if we pre-allocate arrays (instead of use append)
         features = np.reshape(features, (features.shape[0], 1)) # reshape features array from eg. (785,) to (785, 1)
         for i in range(self.n_hidden):
             z = np.dot(self.weights[0][i], features)[0] #weights*features dot product, note both ndarrays -> returns ndarray
@@ -184,15 +178,18 @@ class Network(object):
         '''
         Computes the output from the hidden layer (number of perceptrons given by self.n_hidden)
         '''
-        output_activations = [0]*self.n_output
+        output_activations = [0] * self.n_output # speeds up run-time if we pre-allocate arrays (instead of use append)
         for i in range(self.n_output):
-            z = np.dot(self.weights[1][i], hidden_activations) #weights*features dot product
-            output_activations[i] = self.sigma(z) #threshold activation function
+            z = np.dot(self.weights[1][i], hidden_activations) #weights*features dot product, note np.dot return is a float 
+            output_activations[i] = self.sigma(z)
 
         return output_activations 
 
 
     def output_error(self, outputs, targets):
+        '''
+        Computes the error for each output unit
+        '''
         output_errors = [0] * self.n_output
         for i in range(self.n_output):
             output_errors[i] = outputs[i] * (1.0 - outputs[i]) * (targets[i] - outputs[i])
@@ -201,11 +198,14 @@ class Network(object):
 
 
     def hidden_error(self, hidden_activations, output_errors):
+        '''
+        Computes the error for each hidden unit
+        '''
         hidden_errors = [0] * self.n_hidden
         for j in range(self.n_hidden):
             weighted_out_errors = 0
             for k in range(self.n_output):
-                weighted_out_errors += self.weights[1][k][j] * output_errors[k] # TODO finish this ...
+                weighted_out_errors += self.weights[1][k][j] * output_errors[k] # this can be sped up using numpy properly
 
             hidden_errors[j] = hidden_activations[j] * (1 - hidden_activations[j]) * weighted_out_errors
 
@@ -213,6 +213,9 @@ class Network(object):
 
 
     def update_ho_weights(self, hidden_activations, output_errors, ho_delta_hist):
+        '''
+        Update hidden->output unit weights
+        '''
         ## w_kj <- w_kj + eta * d_k * h_j
         # self.weights[1] output units
         # self.weights[1][0] weights from n_hidden that attach to the 0th output unit
@@ -225,6 +228,9 @@ class Network(object):
 
 
     def update_ih_weights(self, training_set, hidden_errors, ih_delta_hist):
+        '''
+        Update input->hidden unit weights
+        '''
         ## w_ji <- w_ji + eta * d_j * x_i
         # self.weights[0] hidden units
         # self.weights[0][0] weights from input that attach to the 0th hidden unit
@@ -237,7 +243,6 @@ class Network(object):
 
 
 def main():
-
     ## Initialize neural network
     ## For this assignment we will use 784 input, 10 hidden, and 1 output perceptrons
     ## Weights are randomly to be [-0.05, 0.05]
@@ -245,11 +250,9 @@ def main():
     nn_net = Network()
 
     ## Load training data
-    '''
     fname = "half_train.data"
     with open("data/" + fname, "rb") as f:
         half_train = pickle.load(f)
-    '''
 
     fname = "test.data"
     with open("data/" + fname, "rb") as f:
