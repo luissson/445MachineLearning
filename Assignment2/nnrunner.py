@@ -5,7 +5,7 @@ import time
 from collections import defaultdict
 import pickle
 from datetime import datetime
-import pdb
+
 
 class Network(object):
     '''
@@ -50,7 +50,7 @@ class Network(object):
         return 1 / (1 + np.exp(-z))
 
 
-    def Test(self, test_data, build_matrix=False):
+    def Test(self, test_data, build_matrix=True):
         '''
         '''
         n_test = len(test_data)
@@ -95,7 +95,7 @@ class Network(object):
         training_sets = [training_data[k:k+self.subset_size] for k in range(0, M, self.subset_size)]
 
         ## Get accuracy on training data with no training
-        no_train_result = self.Test(training_data)
+        no_train_result = (self.Test(training_data), self.Test(test_data))
 
         if self.print_logs:
             print(f"Training set accuracy with no training: {100*no_train_result:.2f}%")
