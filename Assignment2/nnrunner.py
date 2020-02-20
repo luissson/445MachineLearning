@@ -1,10 +1,11 @@
 #!/anaconda3/bin/python
 import numpy as np
-import pandas
+import pandas as pd
 import time
 from collections import defaultdict
 import pickle
 from datetime import datetime
+import os
 
 
 class Network(object):
@@ -242,26 +243,75 @@ class Network(object):
             self.weights[0][j] = np.add(self.weights[0][j], ih_delta + np.multiply(self.momentum, ih_delta_hist.pop()))
 
 
+def pandas_append(x):
+    '''Helper method to append bias unit to input layer'''
+    return np.append(x, 1.0)
+
+
+def process_data():
+    init_start = time.time()
+
+    train = pd.read_csv('mnist_train.csv', header=None)
+    train_load = time.time()
+    print("Loaded mnist training data in %.4ss" % (train_load - init_start))
+
+    test = pd.read_csv('mnist_test.csv', header=None)
+    test_load = time.time()
+    print("Loaded mnist test data in %.4ss" % (test_load - train_load))
+
+    training_data = [(train.iloc[i][1:].values/255.0, train.iloc[i][0]) for i in range(len(train))]
+    train_proc = time.time()
+    print("Processed training data in %.4ss" % (train_proc - test_load))
+
+    test_proc = time.time()
+    test_data = [(test.iloc[i][1:].values/255.0, test.iloc[i][0]) for i in range(len(test))]
+    print("Processed test data in %.4ss" % (test_proc - train_proc))
+
+    print("Finished loading and processing mnist data.")
+
+    for dir_name in ['data', 'results']:
+        try:
+            os.mkdir(dir_name)
+            print("Directory " , dir_name ,  " Created") 
+        except FileExistsError:
+            pass
+
+    test_df = pd.DataFrame(test_data, columns=['data', 'label'])
+    test_df['data'] = test_df['data'].apply(pandas_append, 1)
+    test_data = test_df.values
+
+    train_size = len(training_data)
+    half_train_dig = (train_size // 2) // 10
+    qrter_train_dig = (train_size // 4) // 10
+
+    training_df = pd.DataFrame(training_data, columns=['data', 'label'])
+    training_df['data'] = training_df['data'].apply(pandas_append, 1) # Append the bias unit here, our input is now a list of 785 values
+
+    half_train = []
+    qrter_train = []
+    for i in range(10):
+        idxs = training_df.index[training_df['label'] == i].tolist() # indices where the target value is equal to iterator i
+        np.random.shuffle(idxs)
+        half_train.extend(training_df.values[idxs[:half_train_dig]])
+        qrter_train.extend(training_df.values[idxs[half_train_dig:half_train_dig + qrter_train_dig]])
+        
+    np.random.shuffle(half_train)
+    np.random.shuffle(qrter_train)
+    training_data = training_df.values
+
+    return test_data, training_data, half_train, qrter_train
+
+
 def main():
     ## Initialize neural network
     ## For this assignment we will use 784 input, 10 hidden, and 1 output perceptrons
     ## Weights are randomly to be [-0.05, 0.05]
-    nn_start = time.time()
     nn_net = Network()
 
-    ## Load training data
-    fname = "half_train.data"
-    with open("data/" + fname, "rb") as f:
-        half_train = pickle.load(f)
+    test_data, training_data, half_train, qrter_train = process_data()
 
-    fname = "test.data"
-    with open("data/" + fname, "rb") as f:
-        test_data = pickle.load(f)
-
-    fname = "qrter_train.data"
-    with open("data/" + fname, "rb") as f:
-        qrter_train = pickle.load(f)
-
+    print("Beginning training")
+    nn_start = time.time()
     nn_net.Train(qrter_train, test_data, True)
     print(f"Network training completed in {(time.time() - nn_start)/60.0:.2f} minutes")
 
