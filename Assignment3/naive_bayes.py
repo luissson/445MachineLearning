@@ -61,7 +61,7 @@ def naive_bayes_test(test_data, training_params):
                 try:
                     feature_probs[label].append(math.log(norm(mean, std).pdf(feature), 10))
                 except ValueError:
-                    feature_probs[label].append(0.0)
+                    feature_probs[label].append(-500.0) # log10(0) = -inf, -500.0 is close
 
             row_prob.append(math.log(training_params[label], 10) + np.sum(feature_probs[label]))
 
